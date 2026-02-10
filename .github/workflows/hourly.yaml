@@ -21,7 +21,7 @@ jobs:
       - name: Run multiple npm installs
         working-directory: ./temp_installs
         run: |
-          for i in {1..30}
+          for i in {1..5}
           do
             echo "Installation $i"
             mkdir install_$i
