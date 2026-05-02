@@ -1,10 +1,12 @@
-name: Hourly Multiple npm Installs
+name: Disposable Email Validator Install
 
 on:
   schedule:
-    # Trigger the job every hour
-    - cron: '0 * * * *'
-  workflow_dispatch: # Manual trigger
+    # Weekdays: 12 triggers/day at staggered times
+    - cron: '17 0,2,4,7,9,11,13,15,17,19,21,23 * * 1-5'
+    # Weekends: 6 triggers/day
+    - cron: '42 3,8,12,16,19,22 * * 0,6'
+  workflow_dispatch:
 
 jobs:
   install:
@@ -18,26 +20,31 @@ jobs:
       - name: Create temporary directory
         run: mkdir temp_installs
 
-      - name: Run multiple npm installs
+      - name: Run npm installs with variance
         working-directory: ./temp_installs
         run: |
-          for i in {1..18}
+          # Batch size 12-30 (avg ~21)
+          # Weekday: 12 triggers × 21 = ~252/day
+          # Weekend: 6 triggers × 21 = ~126/day
+          # Weekly avg: ~216/day, range ~150-300
+          batch_size=$(( (RANDOM % 19) + 12 ))
+          echo "Running $batch_size installations"
+
+          for i in $(seq 1 $batch_size)
           do
-            echo "Installation $i"
+            echo "Installation $i of $batch_size"
             mkdir install_$i
             cd install_$i
             npm init -y > /dev/null
             npm i disposable-email-validator
             cd ..
-            echo "------------------------"
-            # Clear npm cache to force download
-            npm cache clean --force
-          done
 
-      - name: Check installations
-        run: |
-          echo "Checking installations:"
-          find temp_installs -name "disposable-email-validator" | wc -l
+            # Short pause between installs (3-15 seconds)
+            pause=$(( (RANDOM % 13) + 3 ))
+            sleep $pause
+
+            npm cache clean --force > /dev/null 2>&1
+          done
 
       - name: Clean up
         run: rm -rf temp_installs

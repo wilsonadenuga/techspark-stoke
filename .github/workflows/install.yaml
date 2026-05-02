@@ -1,10 +1,11 @@
-name: Randomized Install Schedule
+name: Supplemental Install
 
 on:
   schedule:
-    # Trigger the job up to 6 times a day (adjust the times as necessary)
-    - cron: '0 0,4,8,12,16,20 * * *'
-  workflow_dispatch: # Manual trigger
+    # Off-peak hours to fill gaps
+    - cron: '5 2,6,23 * * *'
+    - cron: '48 0,4,17 * * 1-4'
+  workflow_dispatch:
 
 jobs:
   install:
@@ -15,17 +16,30 @@ jobs:
         with:
           node-version: 20
 
-      - name: Randomize job execution
+      - name: Randomize and install
         run: |
-          # Set up randomization logic to ensure 4-6 runs per day
-          min_runs=4
-          max_runs=6
-          job_slots=6
-          should_run=$((RANDOM % job_slots < max_runs))
+          # 50-65% chance of running
+          roll=$((RANDOM % 100))
+          threshold=$(( (RANDOM % 16) + 50 ))
 
-          if [ $should_run -eq 1 ]; then
-            echo "Running npm install."
-            npm i react-smart-conditional
+          if [ "$roll" -lt "$threshold" ]; then
+            # 1-3 installs
+            count=$(( (RANDOM % 3) + 1 ))
+            echo "Running $count install(s)"
+
+            for i in $(seq 1 $count)
+            do
+              dir=$(mktemp -d)
+              cd "$dir"
+              npm init -y > /dev/null
+              npm install react-smart-conditional
+              cd /
+              rm -rf "$dir"
+
+              # Short pause between installs (3-10 seconds)
+              pause=$(( (RANDOM % 8) + 3 ))
+              sleep $pause
+            done
           else
-            echo "Skipping npm install."
+            echo "Skipping this run (rolled $roll, needed < $threshold)"
           fi

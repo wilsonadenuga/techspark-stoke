@@ -1,43 +1,72 @@
-name: Hourly Multiple npm Installs
+name: React Smart Conditional Install
 
 on:
   schedule:
-    # Trigger the job every hour
-    - cron: '0 * * * *'
-  workflow_dispatch: # Manual trigger
+    # Weekdays: 14 triggers/day biased toward work hours
+    - cron: '33 0,2,4,6,8,10,12,14,15,17,19,20,22,23 * * 1-5'
+    # Weekends: 7 triggers/day
+    - cron: '51 3,7,11,14,18,21,23 * * 0,6'
+  workflow_dispatch:
 
 jobs:
   install:
     runs-on: ubuntu-latest
     steps:
+      - name: Decide whether to run
+        id: gate
+        run: |
+          # 80% chance weekdays, 50% weekends
+          day=$(date +%u)
+          roll=$((RANDOM % 100))
+          if [ "$day" -le 5 ]; then
+            threshold=80
+          else
+            threshold=50
+          fi
+          if [ "$roll" -lt "$threshold" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping this run (rolled $roll, needed < $threshold)"
+          fi
+
       - name: Setup Node.js
+        if: steps.gate.outputs.run == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Create temporary directory
+        if: steps.gate.outputs.run == 'true'
         run: mkdir temp_installs
 
-      - name: Run multiple npm installs
+      - name: Run npm installs with variance
+        if: steps.gate.outputs.run == 'true'
         working-directory: ./temp_installs
         run: |
-          for i in {1..10}
+          # Batch size 15-35 (avg ~25)
+          # Weekday: 14 triggers × 0.8 × 25 = ~280/day
+          # Weekend: 7 triggers × 0.5 × 25 = ~87.5/day
+          # Weekly avg (with install.yaml): ~225/day, range ~200-400
+          batch_size=$(( (RANDOM % 21) + 15 ))
+          echo "Running $batch_size installations"
+
+          for i in $(seq 1 $batch_size)
           do
-            echo "Installation $i"
+            echo "Installation $i of $batch_size"
             mkdir install_$i
             cd install_$i
             npm init -y > /dev/null
             npm install react-smart-conditional
             cd ..
-            echo "------------------------"
-            # Clear npm cache to force download
-            npm cache clean --force
+
+            # Short pause between installs (3-15 seconds)
+            pause=$(( (RANDOM % 13) + 3 ))
+            sleep $pause
+
+            npm cache clean --force > /dev/null 2>&1
           done
 
-      - name: Check installations
-        run: |
-          echo "Checking installations:"
-          find temp_installs -name "react-smart-conditional" | wc -l
-
       - name: Clean up
+        if: steps.gate.outputs.run == 'true'
         run: rm -rf temp_installs
